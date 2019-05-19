@@ -4,11 +4,12 @@ import javafx.util.Pair;
 PathFinder p;
 int width, height;
 int pixelSize;
+Pos prevPos;
 
 void setup() {
   width = 600;
   height = 600;
-  pixelSize = 120;
+  pixelSize = 150;
   int xPos = 0 / pixelSize;
   int yPos = 0 / pixelSize;
   size(600, 600);
@@ -16,13 +17,16 @@ void setup() {
 }
 
 void draw() {
-  background(0);
+  prevPos = p.currentPos;
   p.update();
-  p.display();
+  if (p.currentPos != prevPos) {
+    background(0);
+    p.display();
+  }
   if (p.isDone()) {
     println("Success! Restarting...");
     p.reset();
   }
-  delay(1);
+  delay(0);
 }
   
