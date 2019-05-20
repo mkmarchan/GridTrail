@@ -14,4 +14,8 @@ public class Pos {
     return "(" + x + "," + y + ")";
   }
   
+  public boolean Equals(Pos p) {
+    return x == p.x && y == p.y;
+  }
+  
 }

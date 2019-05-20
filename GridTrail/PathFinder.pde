@@ -1,14 +1,15 @@
-// todo: check skip free and buckets
+// todo: bug when not choosing tile on path
 
 public class PathFinder {
   Pos initPos;
   Pos currentPos;
-  Pos curCheckPos;
+  Pos randomPreChoice;
   CheckPosState curCheckState;
   List<Pos> availablePositions;
   Queue<Pos> toCheck;
   Stack<CheckPosState> s;
   List<Pos> areGood;
+  List<Path> goodPaths;
   int tileSize;
   boolean[][] travelled;
   int gridWidth, gridHeight;
@@ -29,6 +30,7 @@ public class PathFinder {
     currentPos = initPos.getCopy();
     travelled = new boolean[gridHeight][gridWidth];
     travelled[currentPos.y][currentPos.x] = true;
+    goodPaths = new ArrayList<Path>();
   }
   
   // if checked or no available positions and leads to dead end, don't add to areGood and pop curCheckState
@@ -41,10 +43,60 @@ public class PathFinder {
         //println("Current Position: " + currentPos);
         availablePositions = availablePositions(currentPos, travelled);
         //println("Available position: " + availablePositions);
-        toCheck.addAll(availablePositions);
+        
+        randomPreChoice = availablePositions.get(floor(random(availablePositions.size())));
+        for (Pos p : availablePositions) {
+          int xDiff = p.x - currentPos.x;
+          int yDiff = p.y - currentPos.y;
+          boolean onPath = false;
+          boolean isGood = false;
+          
+          for (Path path : goodPaths) {
+            if (path.peekStep().Equals(p)) {
+              isGood = true;
+              areGood.add(p);
+              onPath = true;
+              break;
+            }
+          }
+          
+          if (!onPath) {
+            if (false && isFree(new Pos(p.x + xDiff, p.y + yDiff), travelled) && isFree(new Pos(p.x + 2 * xDiff, p.y + 2 * yDiff), travelled)) {
+              isGood = true;
+              areGood.add(p);
+            } else {
+              toCheck.add(p);
+            }
+          }
+          if (isGood && p.Equals(randomPreChoice)) {
+            toCheck.clear();
+            break;
+          }
+            
+        }
       } else {
-        currentPos = areGood.get(floor(random(areGood.size())));
+        if (areGood.contains(randomPreChoice)) {
+          currentPos = randomPreChoice;
+        } else {
+          currentPos = areGood.get(floor(random(areGood.size())));
+        }
         areGood.clear();
+        availablePositions.clear();
+        
+        Path onPath = null;
+        
+        for (Path path : goodPaths) {
+          if (path.peekStep().Equals(currentPos)) {
+            onPath = path;
+            path.removeStep();
+            break;
+          }
+        }
+        
+        goodPaths = new ArrayList<Path>();
+        if (onPath != null) {
+          goodPaths.add(onPath);
+        }
         
         if (travelled[currentPos.y][currentPos.x] == true) {
           //println("BUG!");
@@ -57,16 +109,19 @@ public class PathFinder {
     } else {
       if (curCheckState == null) {
         s = new Stack<CheckPosState>();
-        curCheckState = new CheckPosState(toCheck.remove(), travelled);
-        curCheckPos = curCheckState.checkPos;
+        Pos newCheckPos = toCheck.remove();
+        curCheckState = new CheckPosState(newCheckPos, travelled, new Path(newCheckPos));
         
         curCheckState.travelled[curCheckState.checkPos.y][curCheckState.checkPos.x] = true;
         curCheckState.checked = true;
-        curCheckState.addNextMoves(availablePositions(curCheckState.checkPos, curCheckState.travelled));
+        
+        List<Pos> nextMoves = availablePositions(curCheckState.checkPos, curCheckState.travelled);
         
         s.push(curCheckState);
-        for (CheckPosState move : curCheckState.nextMoves) {
-          s.push(move);
+        for (Pos move : nextMoves) {
+          curCheckState.travelled[move.y][move.x] = true;
+          s.push(new CheckPosState(move, curCheckState.travelled, curCheckState.path));
+          curCheckState.travelled[move.y][move.x] = false;
         }
       }
       
@@ -75,18 +130,26 @@ public class PathFinder {
         curCheckState = null;
       } else {
         curCheckState = s.pop();
+        List<Pos> nextMoves = availablePositions(curCheckState.checkPos, curCheckState.travelled);
         
-        if (isDone(curCheckState.travelled)){
+        if (nextMoves.isEmpty() && isDone(curCheckState.travelled)){
+          areGood.add(curCheckState.path.peekStep());
+          curCheckState.path.removeStep();
+          goodPaths.add(curCheckState.path);
+          
+          if (randomPreChoice.Equals(curCheckState.path.peekStep())) {
+            toCheck.clear();
+          }
           curCheckState = null;
-          areGood.add(curCheckPos);
           return;
         } else if (curCheckState.checked) {
           return;
         } else {
           curCheckState.checked = true;
-          curCheckState.addNextMoves(availablePositions(curCheckState.checkPos, curCheckState.travelled));
-          for (CheckPosState move : curCheckState.nextMoves) {
-            s.push(move);
+          for (Pos move : nextMoves) {
+            curCheckState.travelled[move.y][move.x] = true;
+            s.push(new CheckPosState(move, curCheckState.travelled, curCheckState.path));
+            curCheckState.travelled[move.y][move.x] = false;
           }
         }
       }
@@ -109,15 +172,22 @@ public class PathFinder {
       for (int i = 0; i < travelled.length; i++) {
         for (int j = 0; j < travelled[i].length; j++) {
           if (curCheckState.travelled[i][j]) {
-            rect(j * tileSize, i * tileSize, floor(tileSize / 2), floor(tileSize / 2));
+            rect(j * tileSize + floor(3 * tileSize / 8), i * tileSize + floor(3 * tileSize / 8), floor(tileSize / 4), floor(tileSize / 4));
           }
         }
       }
     }
     
+    
     for (int i = 0; i < availablePositions.size(); i++) {
       Pos thisPos = availablePositions.get(i);
-      fill(0, 255, 0);
+      if (areGood.contains(thisPos)) {
+        fill(0, 255, 0);
+      } else if (toCheck.contains(thisPos) || curCheckState != null && curCheckState.path.peekStep().Equals(thisPos)) {
+        fill(0, 0, 255);
+      } else {
+        fill(255, 0, 0);
+      }
       rect(thisPos.x * tileSize + floor(tileSize / 2), thisPos.y * tileSize, floor(tileSize / 2), floor(tileSize / 2));
     }
 
@@ -132,8 +202,6 @@ public class PathFinder {
       int xOffset = (int) ((abs(1.5 - i) - 0.5) * Math.signum(1.5 - i));
       int yOffset = (int) ((1 - abs(xOffset)) * Math.signum(1.5 - i));
       Pos thisPos = new Pos(curPos.x + xOffset, curPos.y + yOffset);
-      //println("Checking: " + thisPos);
-      //println("isFree: " + isFree(thisPos, travelled));
       if (isFree(thisPos, travelled)) {
         choices.add(thisPos);
       }
